@@ -5,7 +5,8 @@ SmartSpend Web is a browser-based version of the expense tracker. It uses plain 
 ## Features
 
 - Add expenses with amount, category, note, payment method, date, and Need/Want type.
-- Store expenses locally in the browser with `localStorage`.
+- Log in or create a local account before seeing the app.
+- Store each user's expenses locally in the browser with `localStorage`.
 - View dashboard totals for today, this week, this month, and this year.
 - Filter expense history by Today, This Week, This Month, This Year, or All.
 - See analytics charts drawn with the HTML canvas.
@@ -32,3 +33,5 @@ http://localhost:5173
 ## Data
 
 All data stays in the browser on the current device. Clearing site data or browser storage will remove saved expenses.
+
+The login system is local-only and intended for the current no-backend MVP. It separates data between users on the same browser/device, but it does not provide cloud sync or production-grade server authentication.

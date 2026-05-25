@@ -3,7 +3,7 @@
 SmartSpend now includes two versions:
 
 - `SmartSpend`: a native iPhone app built with SwiftUI, SwiftData, and Swift Charts for iOS 17 or later.
-- `SmartSpendWeb`: a browser-based local-first app that runs on Windows, macOS, Linux, Android, and iPhone.
+- `SmartSpendWeb`: a browser-based local-first app that runs on Windows, macOS, Linux, Android, and iPhone. It includes local login/create-account screens so expenses are separated by user on the same device/browser.
 
 ## MVP Scope
 
@@ -38,3 +38,5 @@ python -m http.server 5173
 ```
 
 Then open `http://localhost:5173`.
+
+The web login is local-only. Accounts and expenses are stored in the browser on the current device; they do not sync across devices until a backend such as Firebase, Supabase, or a custom API is added.

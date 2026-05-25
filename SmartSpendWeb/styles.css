@@ -40,6 +40,78 @@ button {
   cursor: pointer;
 }
 
+[hidden] {
+  display: none !important;
+}
+
+.auth-screen {
+  display: grid;
+  min-height: 100vh;
+  place-items: center;
+  padding: 24px;
+}
+
+.auth-card {
+  width: min(480px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  padding: 24px;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.auth-brand strong,
+.auth-brand span {
+  display: block;
+}
+
+.auth-brand span,
+.auth-copy p {
+  color: var(--muted);
+}
+
+.auth-copy {
+  margin-bottom: 18px;
+}
+
+.auth-copy h1 {
+  margin-bottom: 10px;
+}
+
+.auth-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.auth-tab {
+  min-height: 42px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.auth-tab.is-active {
+  border-color: var(--blue);
+  background: #eaf1ff;
+  color: var(--blue);
+}
+
+.auth-form {
+  display: grid;
+  gap: 14px;
+}
+
 .app-shell {
   display: grid;
   grid-template-columns: 256px minmax(0, 1fr);
@@ -115,6 +187,28 @@ button {
   width: min(1180px, 100%);
   margin: 0 auto;
   padding: 28px 28px 42px;
+}
+
+.account-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 18px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  padding: 10px 12px;
+  box-shadow: var(--shadow);
+}
+
+.account-strip span {
+  min-width: 0;
+  color: var(--muted);
+}
+
+.account-strip strong {
+  color: var(--text);
 }
 
 .view {

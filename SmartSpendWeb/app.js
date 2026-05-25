@@ -1,4 +1,6 @@
-const STORAGE_KEY = "smartspend.expenses.v1";
+const USERS_KEY = "smartspend.users.v1";
+const SESSION_KEY = "smartspend.session.v1";
+const EXPENSES_KEY_PREFIX = "smartspend.expenses.v2.";
 
 const categories = [
   "Groceries",
@@ -50,7 +52,8 @@ const chartColors = [
   "#64748b",
 ];
 
-let expenses = loadExpenses();
+let currentUser = null;
+let expenses = [];
 let currentView = "dashboard";
 let historyFilter = "This Month";
 
@@ -68,6 +71,20 @@ const dateFormatter = new Intl.DateTimeFormat(undefined, {
 const monthFormatter = new Intl.DateTimeFormat(undefined, { month: "short" });
 
 const elements = {
+  authScreen: document.querySelector("#auth-screen"),
+  appShell: document.querySelector("#app-shell"),
+  authTabs: document.querySelectorAll(".auth-tab"),
+  loginForm: document.querySelector("#login-form"),
+  signupForm: document.querySelector("#signup-form"),
+  loginMessage: document.querySelector("#login-message"),
+  signupMessage: document.querySelector("#signup-message"),
+  loginUsername: document.querySelector("#login-username"),
+  loginPassword: document.querySelector("#login-password"),
+  signupName: document.querySelector("#signup-name"),
+  signupUsername: document.querySelector("#signup-username"),
+  signupPassword: document.querySelector("#signup-password"),
+  userDisplay: document.querySelector("#user-display"),
+  logoutButton: document.querySelector("#logout-button"),
   views: document.querySelectorAll(".view"),
   navItems: document.querySelectorAll(".nav-item"),
   viewLinks: document.querySelectorAll("[data-view-link]"),
@@ -96,6 +113,14 @@ function initializeApp() {
   fillSelect(elements.paymentMethod, paymentMethods);
   elements.date.value = toInputDate(new Date());
 
+  elements.authTabs.forEach((tab) => {
+    tab.addEventListener("click", () => showAuthMode(tab.dataset.authMode));
+  });
+
+  elements.loginForm.addEventListener("submit", handleLogin);
+  elements.signupForm.addEventListener("submit", handleSignup);
+  elements.logoutButton.addEventListener("click", logout);
+
   elements.navItems.forEach((item) => {
     item.addEventListener("click", () => showView(item.dataset.view));
   });
@@ -121,7 +146,7 @@ function initializeApp() {
     navigator.serviceWorker.register("service-worker.js").catch(() => {});
   }
 
-  renderAll();
+  restoreSession();
 }
 
 function fillSelect(select, options) {
@@ -131,6 +156,11 @@ function fillSelect(select, options) {
 }
 
 function showView(viewName) {
+  if (!currentUser) {
+    showAuthScreen();
+    return;
+  }
+
   currentView = viewName;
 
   elements.views.forEach((view) => {
@@ -148,8 +178,131 @@ function showView(viewName) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function showAuthMode(mode) {
+  const isLogin = mode === "login";
+  elements.loginForm.hidden = !isLogin;
+  elements.signupForm.hidden = isLogin;
+  elements.authTabs.forEach((tab) => {
+    tab.classList.toggle("is-active", tab.dataset.authMode === mode);
+  });
+  setAuthMessage(elements.loginMessage, "");
+  setAuthMessage(elements.signupMessage, "");
+}
+
+async function handleLogin(event) {
+  event.preventDefault();
+
+  const username = normalizeUsername(elements.loginUsername.value);
+  const password = elements.loginPassword.value;
+  const user = loadUsers().find((item) => item.username === username);
+
+  if (!user) {
+    setAuthMessage(elements.loginMessage, "Username or password is incorrect.", true);
+    return;
+  }
+
+  const passwordHash = await hashPassword(password, user.passwordSalt);
+  if (passwordHash !== user.passwordHash) {
+    setAuthMessage(elements.loginMessage, "Username or password is incorrect.", true);
+    return;
+  }
+
+  signIn(user);
+}
+
+async function handleSignup(event) {
+  event.preventDefault();
+
+  const name = elements.signupName.value.trim();
+  const username = normalizeUsername(elements.signupUsername.value);
+  const password = elements.signupPassword.value;
+
+  if (name.length < 2) {
+    setAuthMessage(elements.signupMessage, "Enter your name.", true);
+    return;
+  }
+
+  if (username.length < 3) {
+    setAuthMessage(elements.signupMessage, "Choose a username with at least 3 characters.", true);
+    return;
+  }
+
+  if (password.length < 6) {
+    setAuthMessage(elements.signupMessage, "Choose a password with at least 6 characters.", true);
+    return;
+  }
+
+  const users = loadUsers();
+  if (users.some((user) => user.username === username)) {
+    setAuthMessage(elements.signupMessage, "That username already exists on this device.", true);
+    return;
+  }
+
+  const passwordSalt = createSalt();
+  const user = {
+    id: createId(),
+    name,
+    username,
+    passwordSalt,
+    passwordHash: await hashPassword(password, passwordSalt),
+    createdAt: new Date().toISOString(),
+  };
+
+  saveUsers([...users, user]);
+  signIn(user);
+}
+
+function signIn(user) {
+  currentUser = user;
+  localStorage.setItem(SESSION_KEY, user.username);
+  expenses = loadExpenses();
+  elements.userDisplay.textContent = user.name;
+  elements.authScreen.hidden = true;
+  elements.appShell.hidden = false;
+  elements.loginForm.reset();
+  elements.signupForm.reset();
+  showView("dashboard");
+  renderAll();
+}
+
+function logout() {
+  localStorage.removeItem(SESSION_KEY);
+  currentUser = null;
+  expenses = [];
+  resetForm();
+  showAuthScreen();
+}
+
+function restoreSession() {
+  const sessionUsername = localStorage.getItem(SESSION_KEY);
+  const user = loadUsers().find((item) => item.username === sessionUsername);
+
+  if (user) {
+    signIn(user);
+  } else {
+    showAuthScreen();
+  }
+}
+
+function showAuthScreen() {
+  elements.authScreen.hidden = false;
+  elements.appShell.hidden = true;
+  showAuthMode("login");
+  elements.loginUsername.focus();
+}
+
+function setAuthMessage(target, message, isError = false) {
+  target.textContent = message;
+  target.classList.toggle("is-error", isError);
+}
+
 function saveExpense(event) {
   event.preventDefault();
+
+  if (!currentUser) {
+    showAuthScreen();
+    return;
+  }
 
   const amount = parseAmount(elements.amount.value);
   if (!amount) {
@@ -158,7 +311,7 @@ function saveExpense(event) {
   }
 
   const expense = {
-    id: crypto.randomUUID(),
+    id: createId(),
     amount,
     category: elements.category.value,
     note: elements.note.value.trim(),
@@ -199,6 +352,10 @@ function setFormMessage(message, isError = false) {
 }
 
 function renderAll() {
+  if (!currentUser) {
+    return;
+  }
+
   expenses = expenses.sort(sortByNewest);
   renderDashboard();
   renderHistory();
@@ -328,7 +485,7 @@ function renderExpenseRow(expense, includeDelete = false) {
       <div class="expense-icon">${escapeHtml(categoryIcons[expense.category] || ".")}</div>
       <div class="expense-main">
         <strong>${escapeHtml(expense.category)}</strong>
-        <span>${escapeHtml(note)} • ${escapeHtml(formatExpenseDate(expense.date))}</span>
+        <span>${escapeHtml(note)} - ${escapeHtml(formatExpenseDate(expense.date))}</span>
       </div>
       <div class="expense-side">
         <strong>${currency(expense.amount)}</strong>
@@ -711,6 +868,11 @@ function currentInterval(unit) {
 }
 
 function addSampleData() {
+  if (!currentUser) {
+    showAuthScreen();
+    return;
+  }
+
   const now = new Date();
   const samples = [
     sampleExpense(68.45, "Groceries", "Weekly groceries", "Debit Card", "Need", now),
@@ -729,7 +891,7 @@ function addSampleData() {
 
 function sampleExpense(amount, category, note, paymentMethod, type, date) {
   return {
-    id: crypto.randomUUID(),
+    id: createId(),
     amount,
     category,
     note,
@@ -741,8 +903,12 @@ function sampleExpense(amount, category, note, paymentMethod, type, date) {
 }
 
 function loadExpenses() {
+  if (!currentUser) {
+    return [];
+  }
+
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    const stored = JSON.parse(localStorage.getItem(expenseStorageKey()) || "[]");
     return Array.isArray(stored) ? stored : [];
   } catch {
     return [];
@@ -750,7 +916,63 @@ function loadExpenses() {
 }
 
 function saveExpenses() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(expenses));
+  if (!currentUser) {
+    return;
+  }
+
+  localStorage.setItem(expenseStorageKey(), JSON.stringify(expenses));
+}
+
+function expenseStorageKey() {
+  return `${EXPENSES_KEY_PREFIX}${currentUser.username}`;
+}
+
+function loadUsers() {
+  try {
+    const stored = JSON.parse(localStorage.getItem(USERS_KEY) || "[]");
+    return Array.isArray(stored) ? stored : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveUsers(users) {
+  localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+function normalizeUsername(value) {
+  return value.trim().toLowerCase();
+}
+
+function createSalt() {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return [...bytes].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+async function hashPassword(password, salt) {
+  if (!crypto.subtle) {
+    return fallbackHash(`${salt}:${password}`);
+  }
+
+  const input = new TextEncoder().encode(`${salt}:${password}`);
+  const digest = await crypto.subtle.digest("SHA-256", input);
+  return [...new Uint8Array(digest)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+function createId() {
+  return crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
+}
+
+function fallbackHash(value) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return String(hash >>> 0);
 }
 
 function sortByNewest(a, b) {
