@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#2563eb" />
+    <title>SmartSpend</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Primary navigation">
+        <div class="brand">
+          <img src="assets/icon.svg" alt="" class="brand-mark" />
+          <div>
+            <strong>SmartSpend</strong>
+            <span>Expense Tracker</span>
+          </div>
+        </div>
+
+        <nav class="nav-list">
+          <button class="nav-item is-active" data-view="dashboard" type="button">
+            <span aria-hidden="true">⌂</span>
+            <span>Dashboard</span>
+          </button>
+          <button class="nav-item" data-view="add" type="button">
+            <span aria-hidden="true">+</span>
+            <span>Add Expense</span>
+          </button>
+          <button class="nav-item" data-view="history" type="button">
+            <span aria-hidden="true">≡</span>
+            <span>History</span>
+          </button>
+          <button class="nav-item" data-view="analytics" type="button">
+            <span aria-hidden="true">▦</span>
+            <span>Analytics</span>
+          </button>
+          <button class="nav-item" data-view="advisor" type="button">
+            <span aria-hidden="true">◇</span>
+            <span>Advisor</span>
+          </button>
+        </nav>
+      </aside>
+
+      <main class="content">
+        <section id="dashboard" class="view is-active" aria-labelledby="dashboard-title">
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Overview</p>
+              <h1 id="dashboard-title">Dashboard</h1>
+            </div>
+            <button class="secondary-action" id="add-sample-data" type="button">Add sample data</button>
+          </header>
+
+          <div class="summary-grid" id="summary-grid"></div>
+          <section class="panel">
+            <div class="panel-header">
+              <h2>Recent Expenses</h2>
+              <button class="text-action" data-view-link="history" type="button">View all</button>
+            </div>
+            <div id="recent-expenses" class="stack"></div>
+          </section>
+        </section>
+
+        <section id="add" class="view" aria-labelledby="add-title">
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">New Entry</p>
+              <h1 id="add-title">Add Expense</h1>
+            </div>
+          </header>
+
+          <form id="expense-form" class="form-panel" autocomplete="off">
+            <div class="field-row">
+              <label class="field">
+                <span>Amount</span>
+                <input id="amount" name="amount" inputmode="decimal" placeholder="0.00" required />
+              </label>
+              <label class="field">
+                <span>Date</span>
+                <input id="date" name="date" type="date" required />
+              </label>
+            </div>
+
+            <div class="field-row">
+              <label class="field">
+                <span>Category</span>
+                <select id="category" name="category"></select>
+              </label>
+              <label class="field">
+                <span>Payment Method</span>
+                <select id="paymentMethod" name="paymentMethod"></select>
+              </label>
+            </div>
+
+            <fieldset class="segmented-field">
+              <legend>Expense Type</legend>
+              <label>
+                <input type="radio" name="type" value="Need" checked />
+                <span>Need</span>
+              </label>
+              <label>
+                <input type="radio" name="type" value="Want" />
+                <span>Want</span>
+              </label>
+            </fieldset>
+
+            <label class="field">
+              <span>Description/Note</span>
+              <textarea id="note" name="note" rows="4" placeholder="Optional note"></textarea>
+            </label>
+
+            <p id="form-message" class="form-message" role="status" aria-live="polite"></p>
+
+            <div class="form-actions">
+              <button class="primary-action" type="submit">Save Expense</button>
+              <button class="secondary-action" id="reset-form" type="button">Reset</button>
+            </div>
+          </form>
+        </section>
+
+        <section id="history" class="view" aria-labelledby="history-title">
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Ledger</p>
+              <h1 id="history-title">History</h1>
+            </div>
+            <div class="total-pill" id="history-total">$0.00</div>
+          </header>
+
+          <div class="filter-bar" role="group" aria-label="Expense history filters">
+            <button class="filter-chip is-active" data-filter="This Month" type="button">This Month</button>
+            <button class="filter-chip" data-filter="Today" type="button">Today</button>
+            <button class="filter-chip" data-filter="This Week" type="button">This Week</button>
+            <button class="filter-chip" data-filter="This Year" type="button">This Year</button>
+            <button class="filter-chip" data-filter="All" type="button">All</button>
+          </div>
+
+          <div id="history-list" class="history-list"></div>
+        </section>
+
+        <section id="analytics" class="view" aria-labelledby="analytics-title">
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Charts</p>
+              <h1 id="analytics-title">Analytics</h1>
+            </div>
+          </header>
+
+          <div class="chart-grid">
+            <section class="panel chart-panel">
+              <h2>Spending by Category</h2>
+              <canvas id="category-chart" height="260"></canvas>
+            </section>
+            <section class="panel chart-panel">
+              <h2>Daily Spending Trend</h2>
+              <canvas id="daily-chart" height="260"></canvas>
+            </section>
+            <section class="panel chart-panel">
+              <h2>Need vs Want</h2>
+              <canvas id="type-chart" height="260"></canvas>
+            </section>
+            <section class="panel chart-panel">
+              <h2>Monthly Spending Summary</h2>
+              <canvas id="monthly-chart" height="260"></canvas>
+            </section>
+          </div>
+        </section>
+
+        <section id="advisor" class="view" aria-labelledby="advisor-title">
+          <header class="view-header">
+            <div>
+              <p class="eyebrow">Savings</p>
+              <h1 id="advisor-title">Advisor</h1>
+            </div>
+            <div class="total-pill" id="advisor-savings">$0.00</div>
+          </header>
+
+          <div id="advisor-list" class="advisor-list"></div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" aria-label="Primary navigation">
+        <button class="nav-item is-active" data-view="dashboard" type="button">
+          <span aria-hidden="true">⌂</span>
+          <span>Dashboard</span>
+        </button>
+        <button class="nav-item" data-view="add" type="button">
+          <span aria-hidden="true">+</span>
+          <span>Add</span>
+        </button>
+        <button class="nav-item" data-view="history" type="button">
+          <span aria-hidden="true">≡</span>
+          <span>History</span>
+        </button>
+        <button class="nav-item" data-view="analytics" type="button">
+          <span aria-hidden="true">▦</span>
+          <span>Charts</span>
+        </button>
+        <button class="nav-item" data-view="advisor" type="button">
+          <span aria-hidden="true">◇</span>
+          <span>Advisor</span>
+        </button>
+      </nav>
+    </div>
+
+    <script src="app.js" type="module"></script>
+  </body>
+</html>
