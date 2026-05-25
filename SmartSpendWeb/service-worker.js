@@ -1,9 +1,9 @@
-const CACHE_NAME = "smartspend-web-v7";
+const CACHE_NAME = "smartspend-web-v8";
 const APP_FILES = [
   "./",
   "./index.html",
-  "./styles.css?v=7",
-  "./app.js?v=7",
+  "./styles.css?v=8",
+  "./app.js?v=8",
   "./manifest.webmanifest",
   "./assets/icon.svg",
 ];
@@ -26,6 +26,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
+    return;
+  }
+
+  const url = new URL(event.request.url);
+  if (url.pathname.startsWith("/api/")) {
     return;
   }
 

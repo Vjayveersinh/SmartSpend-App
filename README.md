@@ -1,9 +1,10 @@
 # SmartSpend
 
-SmartSpend now includes two versions:
+SmartSpend now includes two versions plus a deployable backend:
 
 - `SmartSpend`: a native iPhone app built with SwiftUI, SwiftData, and Swift Charts for iOS 17 or later.
-- `SmartSpendWeb`: a browser-based local-first app that runs on Windows, macOS, Linux, Android, and iPhone. It includes local login/create-account screens so expenses are separated by user on the same device/browser.
+- `SmartSpendWeb`: a browser-based app that runs on Windows, macOS, Linux, Android, and iPhone.
+- `server`: a Node/Express backend with account login, JWT sessions, and per-user expense storage.
 
 ## MVP Scope
 
@@ -28,7 +29,40 @@ Open `SmartSpend.xcodeproj` in Xcode 15 or later, choose an iPhone simulator run
 
 Because this project was generated from a Windows environment, run a first build in Xcode on macOS to let Xcode refresh signing and any local project metadata. If needed, set your development team in the target's Signing & Capabilities tab.
 
-## Run the Web App
+## Run the Full Web App With Backend
+
+Install dependencies once:
+
+```powershell
+npm install
+```
+
+Start the backend and frontend together:
+
+```powershell
+npm start
+```
+
+Then open:
+
+```text
+http://localhost:5177
+```
+
+The backend uses PostgreSQL when `DATABASE_URL` is set. Without `DATABASE_URL`, it stores local development data in `server/data/smartspend-db.json`.
+
+## Deploy Live
+
+This repo includes `render.yaml` for Render Blueprint deployment:
+
+1. Push the latest code to GitHub.
+2. In Render, create a new Blueprint from this repository.
+3. Render creates the web service and Postgres database from `render.yaml`.
+4. After deployment, open the Render app URL and create accounts for you and your wife.
+
+Each login has separate data. If you want one shared household view, create one shared family account for now.
+
+## Run the Static Web App Only
 
 Open `SmartSpendWeb/index.html` directly in a browser, or run a local server for PWA/offline support:
 
@@ -39,4 +73,4 @@ python -m http.server 5173
 
 Then open `http://localhost:5173`.
 
-The web login is local-only. Accounts and expenses are stored in the browser on the current device; they do not sync across devices until a backend such as Firebase, Supabase, or a custom API is added.
+If the backend API is not available, the web app falls back to local browser storage for development.

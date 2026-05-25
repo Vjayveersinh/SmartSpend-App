@@ -4,7 +4,10 @@ build/
 *.xcuserstate
 xcuserdata/
 .vscode/
+node_modules/
+.env
 *.moved-aside
 *.xccheckout
 *.xcscmblueprint
 SmartSpendWeb/screenshot-*.png
+server/data/

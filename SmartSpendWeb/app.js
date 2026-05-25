@@ -1,6 +1,8 @@
 const USERS_KEY = "smartspend.users.v1";
 const SESSION_KEY = "smartspend.session.v1";
 const EXPENSES_KEY_PREFIX = "smartspend.expenses.v2.";
+const API_TOKEN_KEY = "smartspend.apiToken.v1";
+const API_BASE = location.protocol === "file:" ? "" : location.origin;
 
 const categories = [
   "Groceries",
@@ -80,6 +82,8 @@ let expenseSearch = "";
 let expenseSort = "Newest";
 let editingExpenseId = null;
 let toastTimer;
+let apiMode = false;
+let authToken = localStorage.getItem(API_TOKEN_KEY);
 
 const moneyFormatter = new Intl.NumberFormat("en-US", {
   style: "currency",
@@ -262,6 +266,21 @@ async function handleLogin(event) {
   event.preventDefault();
   const username = normalizeUsername(elements.loginUsername.value);
   const password = elements.loginPassword.value;
+
+  try {
+    const data = await apiRequest("/api/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ username, password }),
+    });
+    await signIn(data.user, { token: data.token });
+    return;
+  } catch (error) {
+    if (!isApiUnavailable(error)) {
+      setAuthMessage(elements.loginMessage, error.message || "Username or password is incorrect.", true);
+      return;
+    }
+  }
+
   const user = loadUsers().find((item) => item.username === username);
 
   if (!user) {
@@ -275,7 +294,7 @@ async function handleLogin(event) {
     return;
   }
 
-  signIn(user);
+  await signIn(user);
 }
 
 async function handleSignup(event) {
@@ -299,6 +318,20 @@ async function handleSignup(event) {
     return;
   }
 
+  try {
+    const data = await apiRequest("/api/auth/signup", {
+      method: "POST",
+      body: JSON.stringify({ name, username, password }),
+    });
+    await signIn(data.user, { token: data.token });
+    return;
+  } catch (error) {
+    if (!isApiUnavailable(error)) {
+      setAuthMessage(elements.signupMessage, error.message || "Could not create account.", true);
+      return;
+    }
+  }
+
   const users = loadUsers();
   if (users.some((user) => user.username === username)) {
     setAuthMessage(elements.signupMessage, "That username already exists on this device.", true);
@@ -316,13 +349,20 @@ async function handleSignup(event) {
   };
 
   saveUsers([...users, user]);
-  signIn(user);
+  await signIn(user);
 }
 
-function signIn(user) {
+async function signIn(user, options = {}) {
   currentUser = user;
+  apiMode = Boolean(options.token);
+  authToken = options.token || null;
+  if (apiMode) {
+    localStorage.setItem(API_TOKEN_KEY, authToken);
+  } else {
+    localStorage.removeItem(API_TOKEN_KEY);
+  }
   localStorage.setItem(SESSION_KEY, user.username);
-  expenses = loadExpenses();
+  expenses = await loadExpenses();
   populateUserChrome();
   elements.authScreen.hidden = true;
   elements.appShell.hidden = false;
@@ -334,6 +374,9 @@ function signIn(user) {
 
 function logout() {
   localStorage.removeItem(SESSION_KEY);
+  localStorage.removeItem(API_TOKEN_KEY);
+  authToken = null;
+  apiMode = false;
   currentUser = null;
   expenses = [];
   resetForm();
@@ -342,12 +385,29 @@ function logout() {
   showAuthScreen();
 }
 
-function restoreSession() {
+async function restoreSession() {
+  if (authToken) {
+    try {
+      const data = await apiRequest("/api/auth/me");
+      await signIn(data.user, { token: authToken });
+      return;
+    } catch {
+      localStorage.removeItem(API_TOKEN_KEY);
+      authToken = null;
+      apiMode = false;
+    }
+  }
+
+  if (await backendIsAvailable()) {
+    showAuthScreen();
+    return;
+  }
+
   const sessionUsername = localStorage.getItem(SESSION_KEY);
   const user = loadUsers().find((item) => item.username === sessionUsername);
 
   if (user) {
-    signIn(user);
+    await signIn(user);
   } else {
     showAuthScreen();
   }
@@ -370,7 +430,7 @@ function populateUserChrome() {
   elements.sidebarUserMeta.textContent = `@${currentUser.username}`;
 }
 
-function saveExpense(event) {
+async function saveExpense(event) {
   event.preventDefault();
 
   if (!currentUser) {
@@ -395,27 +455,45 @@ function saveExpense(event) {
 
   const wasEditing = Boolean(editingExpenseId);
 
-  if (wasEditing) {
-    expenses = expenses.map((expense) =>
-      expense.id === editingExpenseId ? { ...expense, ...payload } : expense
-    );
-    showToast("Expense updated.");
-  } else {
-    expenses = [
-      {
-        id: createId(),
-        ...payload,
-        createdAt: new Date().toISOString(),
-      },
-      ...expenses,
-    ];
-    showToast("Expense saved locally.");
+  try {
+    if (apiMode) {
+      if (wasEditing) {
+        await apiRequest(`/api/expenses/${encodeURIComponent(editingExpenseId)}`, {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        });
+      } else {
+        await apiRequest("/api/expenses", {
+          method: "POST",
+          body: JSON.stringify(payload),
+        });
+      }
+      expenses = await loadExpenses();
+    } else if (wasEditing) {
+      expenses = expenses.map((expense) =>
+        expense.id === editingExpenseId ? { ...expense, ...payload } : expense
+      );
+      saveExpenses();
+    } else {
+      expenses = [
+        {
+          id: createId(),
+          ...payload,
+          createdAt: new Date().toISOString(),
+        },
+        ...expenses,
+      ];
+      saveExpenses();
+    }
+  } catch (error) {
+    setFormMessage(error.message || "Could not save this expense.", true);
+    return;
   }
 
   expenses = expenses.sort(sortByNewest);
-  saveExpenses();
   resetForm();
   renderAll();
+  showToast(wasEditing ? "Expense updated." : apiMode ? "Expense saved to your account." : "Expense saved locally.");
   showView(wasEditing ? "expenses" : "dashboard");
 }
 
@@ -714,11 +792,20 @@ function editExpense(id) {
   showView("add");
 }
 
-function deleteExpense(id) {
-  expenses = expenses.filter((expense) => expense.id !== id);
-  saveExpenses();
-  showToast("Expense deleted.");
-  renderAll();
+async function deleteExpense(id) {
+  try {
+    if (apiMode) {
+      await apiRequest(`/api/expenses/${encodeURIComponent(id)}`, { method: "DELETE" });
+      expenses = await loadExpenses();
+    } else {
+      expenses = expenses.filter((expense) => expense.id !== id);
+      saveExpenses();
+    }
+    showToast("Expense deleted.");
+    renderAll();
+  } catch (error) {
+    showToast(error.message || "Could not delete expense.");
+  }
 }
 
 function renderAnalytics() {
@@ -1297,7 +1384,7 @@ function currentInterval(unit) {
   return { start, end: new Date(now.getFullYear() + 1, 0, 1) };
 }
 
-function addSampleData() {
+async function addSampleData() {
   if (!currentUser) {
     showAuthScreen();
     return;
@@ -1314,10 +1401,33 @@ function addSampleData() {
     sampleExpense(110, "Shopping", "Clothes", "Credit Card", "Want", addDays(now, -18)),
   ];
 
-  expenses = [...samples, ...expenses].sort(sortByNewest);
-  saveExpenses();
-  showToast("Sample data added.");
-  renderAll();
+  try {
+    if (apiMode) {
+      await Promise.all(
+        samples.map((expense) =>
+          apiRequest("/api/expenses", {
+            method: "POST",
+            body: JSON.stringify({
+              amount: expense.amount,
+              category: expense.category,
+              note: expense.note,
+              paymentMethod: expense.paymentMethod,
+              type: expense.type,
+              date: expense.date,
+            }),
+          })
+        )
+      );
+      expenses = await loadExpenses();
+    } else {
+      expenses = [...samples, ...expenses].sort(sortByNewest);
+      saveExpenses();
+    }
+    showToast("Sample data added.");
+    renderAll();
+  } catch (error) {
+    showToast(error.message || "Could not add sample data.");
+  }
 }
 
 function sampleExpense(amount, category, note, paymentMethod, type, date) {
@@ -1333,8 +1443,16 @@ function sampleExpense(amount, category, note, paymentMethod, type, date) {
   };
 }
 
-function loadExpenses() {
+async function loadExpenses() {
   if (!currentUser) return [];
+  if (apiMode) {
+    const data = await apiRequest("/api/expenses");
+    return Array.isArray(data.expenses) ? data.expenses : [];
+  }
+  return loadLocalExpenses();
+}
+
+function loadLocalExpenses() {
   try {
     const stored = JSON.parse(localStorage.getItem(expenseStorageKey()) || "[]");
     return Array.isArray(stored) ? stored : [];
@@ -1344,7 +1462,7 @@ function loadExpenses() {
 }
 
 function saveExpenses() {
-  if (!currentUser) return;
+  if (!currentUser || apiMode) return;
   localStorage.setItem(expenseStorageKey(), JSON.stringify(expenses));
 }
 
@@ -1363,6 +1481,63 @@ function loadUsers() {
 
 function saveUsers(users) {
   localStorage.setItem(USERS_KEY, JSON.stringify(users));
+}
+
+async function apiRequest(path, options = {}) {
+  if (!API_BASE) {
+    throw apiUnavailableError();
+  }
+
+  const headers = {
+    Accept: "application/json",
+    ...(options.body ? { "Content-Type": "application/json" } : {}),
+    ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
+    ...options.headers,
+  };
+
+  let response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+    });
+  } catch {
+    throw apiUnavailableError();
+  }
+
+  if (response.status === 404 || response.status === 405 || response.status === 501) {
+    throw apiUnavailableError();
+  }
+
+  const contentType = response.headers.get("content-type") || "";
+  const data = contentType.includes("application/json") ? await response.json() : {};
+
+  if (!response.ok) {
+    const error = new Error(data.message || "Request failed.");
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
+}
+
+function apiUnavailableError() {
+  const error = new Error("API is not available.");
+  error.code = "API_UNAVAILABLE";
+  return error;
+}
+
+function isApiUnavailable(error) {
+  return error?.code === "API_UNAVAILABLE";
+}
+
+async function backendIsAvailable() {
+  try {
+    await apiRequest("/api/health");
+    return true;
+  } catch (error) {
+    return !isApiUnavailable(error);
+  }
 }
 
 function normalizeUsername(value) {
