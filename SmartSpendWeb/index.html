@@ -131,14 +131,24 @@
             <button class="secondary-action" id="add-sample-data" type="button">Add sample data</button>
           </header>
 
+          <div class="dashboard-topline">
+            <section class="dashboard-hero" id="dashboard-hero"></section>
+            <section class="panel breakdown-panel" id="dashboard-breakdown"></section>
+          </div>
+
           <div class="summary-grid" id="summary-grid"></div>
-          <section class="panel">
-            <div class="panel-header">
-              <h2>Recent Expenses</h2>
-              <button class="text-action" data-view-link="history" type="button">View all</button>
-            </div>
-            <div id="recent-expenses" class="stack"></div>
-          </section>
+
+          <div class="dashboard-lower">
+            <section class="panel">
+              <div class="panel-header">
+                <h2>Recent Expenses</h2>
+                <button class="text-action" data-view-link="history" type="button">View all</button>
+              </div>
+              <div id="recent-expenses" class="stack"></div>
+            </section>
+
+            <section class="panel" id="category-preview"></section>
+          </div>
         </section>
 
         <section id="add" class="view" aria-labelledby="add-title">

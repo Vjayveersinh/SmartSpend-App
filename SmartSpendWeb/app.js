@@ -21,19 +21,35 @@ const categories = [
 const paymentMethods = ["Credit Card", "Debit Card", "Cash", "Apple Pay", "Other"];
 
 const categoryIcons = {
-  Groceries: "G",
-  "Eating Out": "E",
-  Coffee: "C",
+  Groceries: "GR",
+  "Eating Out": "EO",
+  Coffee: "CF",
   Rent: "R",
-  Car: "A",
+  Car: "CA",
   Gas: "F",
-  Shopping: "S",
-  Subscriptions: "N",
-  Gym: "Y",
-  Family: "M",
+  Shopping: "SH",
+  Subscriptions: "SB",
+  Gym: "GY",
+  Family: "FA",
   Medical: "+",
-  Travel: "T",
-  Other: ".",
+  Travel: "TR",
+  Other: "OT",
+};
+
+const categoryThemeColors = {
+  Groceries: "#16a34a",
+  "Eating Out": "#f97316",
+  Coffee: "#92400e",
+  Rent: "#4f46e5",
+  Car: "#0891b2",
+  Gas: "#0f766e",
+  Shopping: "#db2777",
+  Subscriptions: "#7c3aed",
+  Gym: "#dc2626",
+  Family: "#0284c7",
+  Medical: "#2563eb",
+  Travel: "#ca8a04",
+  Other: "#64748b",
 };
 
 const chartColors = [
@@ -88,6 +104,9 @@ const elements = {
   views: document.querySelectorAll(".view"),
   navItems: document.querySelectorAll(".nav-item"),
   viewLinks: document.querySelectorAll("[data-view-link]"),
+  dashboardHero: document.querySelector("#dashboard-hero"),
+  dashboardBreakdown: document.querySelector("#dashboard-breakdown"),
+  categoryPreview: document.querySelector("#category-preview"),
   summaryGrid: document.querySelector("#summary-grid"),
   recentExpenses: document.querySelector("#recent-expenses"),
   form: document.querySelector("#expense-form"),
@@ -376,45 +395,53 @@ function renderDashboard() {
     year: currentInterval("year"),
   };
 
+  const todayTotal = total(filterByInterval(expenses, intervals.today));
+  const weekTotal = total(filterByInterval(expenses, intervals.week));
   const monthExpenses = filterByInterval(expenses, intervals.month);
+  const monthTotal = total(monthExpenses);
+  const yearTotal = total(filterByInterval(expenses, intervals.year));
   const topCategory = categoryTotals(monthExpenses)[0];
   const possibleSavings = getSuggestions(expenses).reduce((sum, item) => sum + item.estimatedSavings, 0);
+  const needTotal = total(monthExpenses.filter((expense) => expense.type === "Need"));
+  const wantTotal = total(monthExpenses.filter((expense) => expense.type === "Want"));
+  const wantShare = monthTotal ? Math.round((wantTotal / monthTotal) * 100) : 0;
+  const needShare = monthTotal ? Math.round((needTotal / monthTotal) * 100) : 0;
+
+  elements.dashboardHero.innerHTML = renderDashboardHero({
+    monthTotal,
+    monthCount: monthExpenses.length,
+    topCategory,
+    possibleSavings,
+  });
+
+  elements.dashboardBreakdown.innerHTML = renderNeedWantBreakdown({
+    needTotal,
+    wantTotal,
+    needShare,
+    wantShare,
+  });
 
   const cards = [
     {
       title: "Today",
-      value: currency(total(filterByInterval(expenses, intervals.today))),
-      note: "Spent today",
+      value: currency(todayTotal),
+      note: todayTotal > 0 ? "Already tracked" : "No spending yet",
       icon: "D",
       color: "var(--orange)",
     },
     {
       title: "This Week",
-      value: currency(total(filterByInterval(expenses, intervals.week))),
-      note: "Current week",
+      value: currency(weekTotal),
+      note: "Current week total",
       icon: "W",
       color: "var(--blue)",
     },
     {
-      title: "This Month",
-      value: currency(total(monthExpenses)),
-      note: "Current month",
-      icon: "M",
-      color: "var(--purple)",
-    },
-    {
       title: "This Year",
-      value: currency(total(filterByInterval(expenses, intervals.year))),
+      value: currency(yearTotal),
       note: "Year to date",
       icon: "Y",
       color: "var(--green)",
-    },
-    {
-      title: "Top Category",
-      value: topCategory ? topCategory.category : "No data",
-      note: topCategory ? `${currency(topCategory.amount)} this month` : "Add expenses to see trends",
-      icon: "T",
-      color: "var(--teal)",
     },
     {
       title: "Possible Savings",
@@ -430,7 +457,12 @@ function renderDashboard() {
   const recent = expenses.slice(0, 5);
   elements.recentExpenses.innerHTML = recent.length
     ? recent.map((expense) => renderExpenseRow(expense)).join("")
-    : renderEmptyState("No expenses yet", "Add your first expense to start tracking.");
+    : renderEmptyState("No expenses yet", "Add your first expense to start tracking.", "Start with one quick entry.");
+
+  elements.categoryPreview.innerHTML = renderCategoryPreview(categoryTotals(monthExpenses));
+  elements.categoryPreview.querySelectorAll("[data-view-link]").forEach((item) => {
+    item.addEventListener("click", () => showView(item.dataset.viewLink));
+  });
 }
 
 function renderSummaryCard(card) {
@@ -443,6 +475,104 @@ function renderSummaryCard(card) {
         <small>${escapeHtml(card.note)}</small>
       </div>
     </article>
+  `;
+}
+
+function renderDashboardHero(data) {
+  const topCategoryText = data.topCategory
+    ? `${data.topCategory.category} - ${currency(data.topCategory.amount)}`
+    : "No category yet";
+  const savingsText = data.possibleSavings > 0 ? currency(data.possibleSavings) : "No flags";
+
+  return `
+    <div class="hero-content">
+      <div>
+        <span class="hero-kicker">This month</span>
+        <strong>${currency(data.monthTotal)}</strong>
+        <p>${data.monthCount} expense${data.monthCount === 1 ? "" : "s"} tracked so far</p>
+      </div>
+      <div class="hero-meter" aria-hidden="true">
+        <span></span>
+      </div>
+    </div>
+    <div class="hero-stats">
+      <div>
+        <span>Top category</span>
+        <strong>${escapeHtml(topCategoryText)}</strong>
+      </div>
+      <div>
+        <span>Advisor savings</span>
+        <strong>${escapeHtml(savingsText)}</strong>
+      </div>
+    </div>
+  `;
+}
+
+function renderNeedWantBreakdown(data) {
+  return `
+    <div class="panel-header compact">
+      <h2>Need vs Want</h2>
+      <span>${data.wantShare}% wants</span>
+    </div>
+    <div class="split-bars">
+      ${renderSplitBar("Need", data.needTotal, data.needShare, "need")}
+      ${renderSplitBar("Want", data.wantTotal, data.wantShare, "want")}
+    </div>
+  `;
+}
+
+function renderSplitBar(label, amount, share, type) {
+  return `
+    <div class="split-row">
+      <div>
+        <strong>${label}</strong>
+        <span>${currency(amount)}</span>
+      </div>
+      <div class="progress-track">
+        <span class="${type}" style="width: ${Math.max(2, share)}%"></span>
+      </div>
+    </div>
+  `;
+}
+
+function renderCategoryPreview(totals) {
+  const visibleTotals = totals.slice(0, 5);
+  const max = Math.max(...visibleTotals.map((item) => item.amount), 1);
+
+  return `
+    <div class="panel-header">
+      <h2>Top Categories</h2>
+      <button class="text-action" data-view-link="analytics" type="button">Charts</button>
+    </div>
+    <div class="category-list">
+      ${
+        visibleTotals.length
+          ? visibleTotals
+              .map((item) => renderCategoryPreviewRow(item, max))
+              .join("")
+          : renderEmptyState("No categories yet", "Your category breakdown will appear here.", "Add sample data or save an expense.")
+      }
+    </div>
+  `;
+}
+
+function renderCategoryPreviewRow(item, max) {
+  const width = Math.max(3, Math.round((item.amount / max) * 100));
+  const theme = categoryTheme(item.category);
+
+  return `
+    <div class="category-row">
+      <div class="category-row-main">
+        ${renderCategoryIcon(item.category)}
+        <div>
+          <strong>${escapeHtml(item.category)}</strong>
+          <span>${currency(item.amount)}</span>
+        </div>
+      </div>
+      <div class="category-track">
+        <span style="width: ${width}%; background: ${theme.color}"></span>
+      </div>
+    </div>
   `;
 }
 
@@ -482,7 +612,7 @@ function renderExpenseRow(expense, includeDelete = false) {
 
   return `
     <article class="expense-row">
-      <div class="expense-icon">${escapeHtml(categoryIcons[expense.category] || ".")}</div>
+      ${renderCategoryIcon(expense.category)}
       <div class="expense-main">
         <strong>${escapeHtml(expense.category)}</strong>
         <span>${escapeHtml(note)} - ${escapeHtml(formatExpenseDate(expense.date))}</span>
@@ -515,7 +645,7 @@ function renderAdvisor() {
 function renderSuggestion(suggestion) {
   return `
     <article class="advisor-card">
-      <div class="expense-icon">${escapeHtml(suggestion.icon)}</div>
+      <div class="expense-icon advisor-icon">${escapeHtml(suggestion.icon)}</div>
       <div>
         <strong>${escapeHtml(suggestion.title)}</strong>
         <p>${escapeHtml(suggestion.message)}</p>
@@ -525,13 +655,37 @@ function renderSuggestion(suggestion) {
   `;
 }
 
-function renderEmptyState(title, message) {
+function renderEmptyState(title, message, hint = "") {
   return `
     <div class="empty-state">
+      <span class="empty-icon">SS</span>
       <strong>${escapeHtml(title)}</strong>
       <span>${escapeHtml(message)}</span>
+      ${hint ? `<small>${escapeHtml(hint)}</small>` : ""}
     </div>
   `;
+}
+
+function renderCategoryIcon(category) {
+  const theme = categoryTheme(category);
+  return `
+    <div
+      class="expense-icon"
+      style="--category-color: ${theme.color}; --category-bg: ${theme.background}"
+      aria-hidden="true"
+    >
+      ${escapeHtml(theme.icon)}
+    </div>
+  `;
+}
+
+function categoryTheme(category) {
+  const color = categoryThemeColors[category] || categoryThemeColors.Other;
+  return {
+    color,
+    background: `${color}18`,
+    icon: categoryIcons[category] || "OT",
+  };
 }
 
 function getSuggestions(allExpenses) {
